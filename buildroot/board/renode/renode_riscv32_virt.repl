@@ -1,0 +1,100 @@
+// Qemu specific, see: https://github.com/qemu/qemu/blob/master/docs/specs/fw_cfg.rst
+// compatible = "qemu,fw-cfg-mmio";
+// fw_fcfg: ?.? @ sysbus <0x10100000, +0x18>
+
+
+// compatible = "cfi-flash";
+// reg = <0x00 0x20000000 0x00 0x2000000 0x00 0x22000000 0x00 0x2000000>;
+// TODO: should be 1 device with two ranges
+flash: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x4000000
+
+
+memory: Memory.MappedMemory @ sysbus 0x80000000
+    size: 0x8000000
+
+
+cpu0: CPU.RiscV32 @ sysbus
+    cpuType: "rv32imafdcsu_zicsr_zifencei"
+    timeProvider: clint
+    allowUnalignedAccesses: true
+    hartId: 0
+    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+
+// XXX: don't know how to model child of the cpu: compatible = "riscv,cpu-intc";
+// XXX: use Antmicro.Renode.Peripherals.IRQControllers.CoreLocalInterruptController?
+// https://github.com/renode/renode-infrastructure/blob/master/src/Emulator/Cores/RiscV/CoreLocalInterruptController.cs
+
+
+// "SOC" starts here
+
+// compatible = "google,goldfish-rtc"
+// XXX: Which Timers.* to use?
+// rtc: ?.? @ sysbus <0x101000, +0x1000>
+//    -> plic@11
+
+
+uart0: UART.NS16550 @ sysbus <0x10000000, +0x100>
+    wideRegisters: true
+    ->plic@10
+
+
+// this is part of "sifive,test1" (regmap = 0x4, a phandle test = 0x4)
+// poweroff { value = <0x5555>; offset = <0x00>; regmap = <0x04>; compatible = "syscon-poweroff"; };
+// reboot { value = <0x7777>; offset = <0x00>; regmap = <0x04>; compatible = "syscon-reboot"; };
+
+// compatible = "sifive,test1\0sifive,test0\0syscon"
+// TODO: Python.PythonPeripheral?
+// test: Python.PythonPeripheral @ sysbus <0x100000, +0x1000>
+//     initable: true
+//     filename: "scripts/pydev/sifive_test_peripheral.py"
+
+
+// compatible = "pci-host-ecam-generic";
+// TODO: Something from Antmicro.Renode.Peripherals.PCI?
+// pci: ?.? @ sysbus <0x30000000, +0x10000000>
+
+
+// compatible = "virtio,mmio" x 8
+// for each virtio_mmioN use matching IRQ: IRQ -> plic@N
+// virtio_mmio8 : ?.? @ sysbus <0x10008000, +0x1000>
+// virtio_mmio7 : ?.? @ sysbus <0x10007000, +0x1000>
+// virtio_mmio6 : ?.? @ sysbus <0x10006000, +0x1000>
+// virtio_mmio5 : ?.? @ sysbus <0x10005000, +0x1000>
+// virtio_mmio4 : ?.? @ sysbus <0x10004000, +0x1000>
+// virtio_mmio3 : ?.? @ sysbus <0x10003000, +0x1000>
+// virtio_mmio2 : ?.? @ sysbus <0x10002000, +0x1000>
+
+// virtio_mmio1 -> /dev/vda
+virtio_mmio1: Storage.VirtIOBlockDevice @ sysbus <0x10001000, +0x1000>
+    IRQ -> plic@1
+
+
+plic: IRQControllers.PlatformLevelInterruptController @ sysbus <0xc000000, +0x210000>
+    numberOfContexts: 9
+    prioritiesEnabled: false
+    numberOfSources: 53
+    [0, 1]->cpu0@[11, 9]
+
+
+clint: IRQControllers.CoreLevelInterruptor @ sysbus <0x2000000, +0x10000>
+    frequency: 4000000
+    numberOfTargets: 1
+    [0, 1] -> cpu0@[3, 7]
+
+
+sysbus:
+    init add:
+        Tag <0x10100000 0x18> "QEMU_FW_CFG"
+        Tag <0x101000 0x1000> "RTC"
+        Tag <0x100000 0x1000> "TEST" // zawiera reboot i poweroff
+        Tag <0x30000000 0x10000000> "PCI"
+        Tag <0x10008000 0x1000> "VIRTIO_MMIO_8"
+        Tag <0x10007000 0x1000> "VIRTIO_MMIO_7"
+        Tag <0x10006000 0x1000> "VIRTIO_MMIO_6"
+        Tag <0x10005000 0x1000> "VIRTIO_MMIO_5"
+        Tag <0x10004000 0x1000> "VIRTIO_MMIO_4"
+        Tag <0x10003000 0x1000> "VIRTIO_MMIO_3"
+        Tag <0x10002000 0x1000> "VIRTIO_MMIO_2"
+        Tag <0x10001000 0x1000> "VIRTIO_MMIO_1"
+

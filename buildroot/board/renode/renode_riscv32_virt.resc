@@ -1,0 +1,28 @@
+using sysbus
+$name?="riscv32_virt"
+mach create $name
+
+machine LoadPlatformDescription $ORIGIN/renode_riscv32_virt.repl
+
+$bios?=$ORIGIN/fw_jump.elf
+$dtb?=$ORIGIN/renode_riscv32_virt.dtb
+$kernel?=$ORIGIN/Image
+$rootfs?=$ORIGIN/rootfs.ext2
+
+showAnalyzer uart0
+
+macro reset
+"""
+	sysbus LoadBinary $kernel 0x80400000
+	
+	cpu0 SetRegisterUnsafe 11 0x82200000
+	sysbus LoadFdt $dtb 0x82200000 "rootwait root=/dev/vda ro" false
+
+	virtio_mmio1 LoadImage $rootfs
+
+	# will load sbi at 0x80000000
+    sysbus LoadELF $bios
+"""
+
+runMacro $reset
+
